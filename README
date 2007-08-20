@@ -1,0 +1,28 @@
+Flickr-Simple version 0.01
+==========================
+
+INSTALLATION
+
+To install this module type the following:
+
+   perl Makefile.PL
+   make
+   make test
+   make install
+
+RELEASE EARLY AND OFTEN
+
+This module is quite incomplete.  Please submit patches or improvements
+to sneak@datavibe.net or join the mailing list by sending mail to
+flickr-simple-subscribe@googlegroups.com.
+
+DEPENDENCIES
+
+This module requires the following modules:
+
+  Flickr::API
+  Log::Agent
+
+COPYRIGHT AND LICENCE
+
+Copyright (C) 2007 by Rev. Jeffrey Paul <sneak@datavibe.net>

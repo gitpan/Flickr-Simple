@@ -1,0 +1,7 @@
+NOTES for Flickr::Simple
+Rev. Jeffrey Paul, <sneak@datavibe.net>
+
+implementation notes:
+
+1) do not call accessor methods in _fetchinfo(), lest you deep-recurse.
+

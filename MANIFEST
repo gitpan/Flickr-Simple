@@ -1,0 +1,18 @@
+Changes
+Makefile.PL
+MANIFEST
+TODO
+NOTES
+README
+t/Flickr-Simple.t
+lib/Flickr/Simple.pm
+lib/Flickr/Simple/Auth.pm
+lib/Flickr/Simple/Misc.pm
+lib/Flickr/Simple/Object.pm
+lib/Flickr/Simple/Photo.pm
+lib/Flickr/Simple/Photoset.pm
+lib/Flickr/Simple/Tag.pm
+lib/Flickr/Simple/User.pm
+bin/metadownloadr
+bin/imagehashes
+META.yml                                 Module meta-data (added by MakeMaker)

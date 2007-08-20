@@ -1,0 +1,165 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings qw( all );
+use lib qw( ../lib );
+
+use Flickr::Simple;
+use Getopt::Long;
+use File::Basename;
+use Data::Dumper;
+use Storable;
+use Log::Agent;
+use Log::Agent::Priorities qw(:LEVELS);
+use LWP::Simple;
+use Digest::MD5;
+
+my $appname = File::Basename::basename($0);
+my $configfile = $ENV{'HOME'} . "/." . $appname . "rc"; 
+my $apikey = 'd16a3c6dd111a75a91591e52724d1c0e';
+my $secret = '91c62a9a90bfec9f';
+my $debug = 0;
+
+my $downloaddir = './';
+my $hashfile = $downloaddir . '/' . 'imagehashes.md5';
+
+main(@ARGV);
+
+sub main {
+	processargs();
+	configlogagent();
+
+	my $config = config();
+	my $auth = auth($config);
+
+	unless($auth->valid()) {
+		my $msg = "Please authorize access to your Flickr account:\n\n".
+			$auth->url() . "\n\n".
+			"Re-run this script when finished.\n";
+		$config->{'auth'} = $auth;
+		writeconfig($config);
+		print $msg;
+		exit(127);
+	} else {
+		$config->{'auth'} = $auth;
+		writeconfig($config);
+	}
+
+	my $user = $auth->authuser();
+	logsay("authed as user: " . $user->username());
+
+        my @photos = $user->all_photos;                                                                      
+        open(HASHFILE,'>',$hashfile)
+		or die "Can't open $hashfile for writing: $!";
+	my $count = 0;
+	foreach my $photo (@photos) {   
+		$count++;
+                my $url = $photo->url('original');                                                           
+                my $t = $photo->title;                                                                       
+                $t =~ s/\t//g;                                                                               
+                my $fn = $downloaddir . '/' .
+			$photo->id . '.' . $photo->originalformat;
+		my $data;
+		unless(-e $fn) {
+			$data = get($url);                                                                        
+                	next unless $data;                                                                    
+			writeout($fn,$data);
+		} else {
+			open(FILEIN,$fn)
+				or die "Can't open $fn for reading: $!";
+			read(FILEIN,$data,1024*1024*20); #20MiB
+			close(FILEIN);
+		}
+		die "Unable to fetch image " . $photo->id . "!\n"
+			unless length($data);
+		my $md5 = Digest::MD5::md5_hex($data);
+                undef $data;                                                                                 
+                print HASHFILE $url . "\t";                                                                           
+                print HASHFILE $t . "\t";                                                                             
+                print HASHFILE $photo->id . "\t";                                                                     
+                print HASHFILE $md5 . "\n";                                                                           
+        	print "Checked photo $count of " . (@photos+0) . ": " .
+			$photo->id . "\n";
+	}
+}
+
+sub writeout {
+	my $fn = shift;
+	my $data = shift;
+	open(OUTFILE,'>',$fn) or die("Can't open $fn for writing: $!");
+	print OUTFILE $data;
+	close(OUTFILE);
+}
+
+sub config {
+	my $config = {};
+	if( -r $configfile ) {
+		$config = readconfig();
+		logdie("Invalid config file (" . $configfile . ")\n")
+			unless $config;
+	}
+	return $config;
+}
+
+sub auth {
+	my $config = shift;
+	my $authobj;
+	if(exists($config->{'auth'})) {
+		$authobj = $config->{'auth'};
+		if(ref($authobj) eq 'Flickr::Simple::Auth') {
+			$authobj = undef if($authobj->error());
+		} else {
+			$authobj = undef;
+		}
+	}
+
+	unless($authobj) {
+		$authobj = Flickr::Simple::Auth->new(
+			{
+				apikey 		=> $apikey,
+				apisecret	=> $secret,
+			}
+		);
+		logdie("Unable to create auth object") unless $authobj;
+		logdie($authobj->error()) if $authobj->error();
+	}
+	return $authobj;
+}
+
+sub processargs {
+	GetOptions(
+		'debug!' => \$debug,
+	);
+}
+
+sub configlogagent {
+	# log output stuff:
+	my $level = 4;
+	my $caller = [];
+	if($debug) {
+		$caller = [ -display => '($sub/$line)', -postfix => 1 ];
+		$level = 10;
+	}
+	logconfig(
+		-prefix		=> File::Basename::basename($0),
+		-level		=> $level,
+		-caller 	=> $caller,
+	);
+}
+
+sub writeconfig {
+	my $config = shift;
+	logdbg(DEBUG,"writing config file");
+	Storable::nstore($config,$configfile)
+		or die("Can't write config ($configfile): $!\n");
+}
+
+sub readconfig {
+	logdbg(DEBUG,"reading config file");
+	my $config = Storable::retrieve($configfile);
+	return $config;
+}
+
+1;
+
+__END__

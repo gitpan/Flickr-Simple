@@ -1,0 +1,149 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings qw( all );
+use lib qw( ../lib/ );
+
+use Flickr::Simple;
+use Getopt::Long;
+use File::Basename;
+use Data::Dumper;
+use Storable;
+use Log::Agent;
+use Log::Agent::Priorities qw(:LEVELS);
+
+my $appname = File::Basename::basename($0);
+my $configfile = $ENV{'HOME'} . "/." . $appname . "rc"; 
+my $apikey = 'a68afb8f6f36518b8a56ec664dfd1d21';
+my $secret = '45ab1ea74160b1c1';
+my $debug = 0;
+
+main(@ARGV);
+
+sub main {
+	processargs();
+	configlogagent();
+
+	my $config = config();
+	my $auth = auth($config);
+
+	unless($auth->valid()) {
+		my $msg = "Please authorize access to your Flickr account:\n\n".
+			$auth->url() . "\n\n".
+			"Re-run this script when finished.\n";
+		$config->{'auth'} = $auth;
+		writeconfig($config);
+		print $msg;
+		exit(127);
+	} else {
+		$config->{'auth'} = $auth;
+		writeconfig($config);
+	}
+
+	my $user = $auth->authuser();
+	logsay("authed as user: " . $user->username());
+
+	#print "icon: " . $user->iconurl() . "\n";
+	#print "photocount: " . $user->count() . "\n";
+
+	#print Data::Dumper::Dumper($user);
+	my @photos = $user->all_photos;
+	foreach my $photo (@photos) {
+		print $photo->photopage . "\n";
+		#print Data::Dumper::Dumper($photo);
+		#print "\n**********************\n";
+	}
+
+	# THIS IS A WORK IN PROGRESS
+	
+	#my @photosets = $user->photosets;
+	#my $set = $photosets[0];
+	#my @photos = $set->photos_in_set;
+	#my $photo = $photos[0];
+	#my $tags = $photo->tags;
+	#print Data::Dumper::Dumper($tags);
+	#
+	#	#print(( $set->title() ? $set->title() : "(no set title)" ) . "\n");
+	#	foreach my $photo ($set->photos_in_set()) {
+	#		print(
+	#			($photo->title() ?
+	#				$photo->title() :
+	#				"(no photo title)" )
+	#			. "\t" . $photo->url() . "\n"
+	#		);
+	#	}
+	#}
+}
+
+sub config {
+	my $config = {};
+	if( -r $configfile ) {
+		$config = readconfig();
+		logdie("Invalid config file (" . $configfile . ")\n")
+			unless $config;
+	}
+	return $config;
+}
+
+sub auth {
+	my $config = shift;
+	my $authobj;
+	if(exists($config->{'auth'})) {
+		$authobj = $config->{'auth'};
+		if(ref($authobj) eq 'Flickr::Simple::Auth') {
+			$authobj = undef if($authobj->error());
+		} else {
+			$authobj = undef;
+		}
+	}
+
+	unless($authobj) {
+		$authobj = Flickr::Simple::Auth->new(
+			{
+				apikey 		=> $apikey,
+				apisecret	=> $secret,
+			}
+		);
+		logdie("Unable to create auth object") unless $authobj;
+		logdie($authobj->error()) if $authobj->error();
+	}
+	return $authobj;
+}
+
+sub processargs {
+	GetOptions(
+		'debug!' => \$debug,
+	);
+}
+
+sub configlogagent {
+	# log output stuff:
+	my $level = 4;
+	my $caller = [];
+	if($debug) {
+		$caller = [ -display => '($sub/$line)', -postfix => 1 ];
+		$level = 10;
+	}
+	logconfig(
+		-prefix		=> File::Basename::basename($0),
+		-level		=> $level,
+		-caller 	=> $caller,
+	);
+}
+
+sub writeconfig {
+	my $config = shift;
+	logdbg(DEBUG,"writing config file");
+	Storable::nstore($config,$configfile)
+		or die("Can't write config ($configfile): $!\n");
+}
+
+sub readconfig {
+	logdbg(DEBUG,"reading config file");
+	my $config = Storable::retrieve($configfile);
+	return $config;
+}
+
+1;
+
+__END__
